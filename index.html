@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Physics Sandbox</title>
+
+<style>
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
+    font-family:Inter,Arial,sans-serif;
+}
+
+canvas{
+    display:block;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+}
+
+#rgbFrame{
+    position:fixed;
+    z-index:2000;
+    inset:0;
+    border:4px solid;
+    border-image:linear-gradient(135deg,#087bff,#00ff88,#a855f7,#087bff) 1;
+    filter:drop-shadow(0 0 5px rgba(0,210,255,.65));
+    animation:rgbShift 5s linear infinite;
+    pointer-events:none;
+}
+
+@keyframes rgbShift{
+    to{filter:hue-rotate(360deg) drop-shadow(0 0 5px rgba(0,210,255,.65))}
+}
+
+#stats{
+    position:fixed;
+    top:20px;
+    left:20px;
+    color:#fff;
+    font-size:clamp(14px,1vw,20px);
+    font-weight:700;
+    line-height:1.6;
+    z-index:1000;
+    text-shadow:0 2px 12px rgba(0,0,0,.8);
+    pointer-events:none;
+    user-select:none;
+}
+
+#brand{
+    position:fixed;
+    z-index:1000;
+    bottom:20px;
+    left:20px;
+    color:#fff;
+    font-size:14px;
+    font-weight:400;
+    pointer-events:none;
+    user-select:none;
+}
+
+#controls{
+    position:fixed;
+    top:20px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:12px;
+    z-index:1000;
+    width:max-content;
+    max-width:calc(100% - 180px);
+}
+
+.glass{
+    padding:clamp(12px,1vw,16px) clamp(18px,1.8vw,30px);
+    font-size:clamp(13px,1vw,16px);
+    font-weight:700;
+    color:white;
+    cursor:pointer;
+    border-radius:999px;
+    border:3px solid rgba(255,255,255,.25);
+    background:rgba(255,255,255,.08);
+    backdrop-filter:blur(24px);
+    -webkit-backdrop-filter:blur(24px);
+    box-shadow:0 12px 30px rgba(0,0,0,.45);
+    transition:transform .18s cubic-bezier(.22,1,.36,1),background .18s;
+}
+
+.glass:hover{transform:translateY(-3px) scale(1.05)}
+.glass:active{transform:scale(.92)}
+.glass.active{background:rgba(255,255,255,.15)}
+#minecraftBtn{
+    border-color:rgba(180,255,190,.58);
+    background:linear-gradient(rgba(14,58,31,.48),rgba(9,35,21,.66)),url("grassblock.png") center/cover;
+    text-shadow:0 1px 3px rgba(0,0,0,.9);
+}
+#minecraftBtn.active{
+    border-color:rgba(144,255,165,.95);
+    background:linear-gradient(rgba(15,91,40,.38),rgba(8,53,27,.56)),url("grassblock.png") center/cover;
+    box-shadow:0 0 22px rgba(91,220,133,.32),0 12px 30px rgba(0,0,0,.45);
+}
+#drawBtn.active{border-color:rgba(105,203,255,.8);background:rgba(50,142,210,.28)}
+#eraserBtn.active{border-color:rgba(255,145,145,.85);background:rgba(190,55,65,.28)}
+#canvas.drawing{cursor:crosshair;touch-action:none}
+#canvas.erasing{cursor:cell;touch-action:none}
+
+@media(max-width:700px){
+    #controls{
+        top:max(8px,env(safe-area-inset-top));
+        left:8px;
+        width:calc(100% - 16px);
+        max-width:none;
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        justify-content:stretch;
+        gap:6px;
+        transform:none;
+        padding:0;
+    }
+    .glass{
+        min-width:0;
+        min-height:42px;
+        padding:8px 4px;
+        border-width:2px;
+        font-size:clamp(10px,2.8vw,12px);
+        white-space:nowrap;
+        touch-action:manipulation;
+    }
+    .glass:hover{transform:none}
+    .glass:active{transform:scale(.96)}
+    #stats{
+        top:max(108px,calc(env(safe-area-inset-top) + 100px));
+        left:10px;
+        display:flex;
+        gap:12px;
+        font-size:12px;
+        line-height:1.3;
+    }
+    #brand{bottom:max(12px,env(safe-area-inset-bottom));left:12px;font-size:12px}
+}
+
+@media(max-width:700px) and (max-height:450px){
+    #stats{
+        top:max(62px,calc(env(safe-area-inset-top) + 54px));
+        right:10px;
+        bottom:auto;
+        left:10px;
+        justify-content:space-between;
+    }
+    #brand{bottom:max(12px,env(safe-area-inset-bottom));left:12px}
+}
+</style>
+</head>
+<body>
+
+<div id="stats">
+    <div>FPS <span id="fps">0</span></div>
+    <div>Balls <span id="ballCount">0</span></div>
+    <div id="tntStats" hidden>TNT <span id="tntCount">0</span></div>
+</div>
+<div id="brand">By DodoDev V0.3</div>
+
+<div id="controls">
+    <button id="autoSpawnBtn" class="glass" type="button">Auto Spawn OFF</button>
+    <button id="autoClickBtn" class="glass" type="button">Auto Click OFF</button>
+    <button id="resetBtn" class="glass" type="button">Reset</button>
+    <button id="drawBtn" class="glass" type="button">Draw OFF</button>
+    <button id="eraserBtn" class="glass" type="button">Eraser OFF</button>
+    <button id="minecraftBtn" class="glass" type="button">Ian Mode OFF</button>
+</div>
+
+<canvas id="canvas"></canvas>
+<div id="rgbFrame" aria-hidden="true"></div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const fpsElement = document.getElementById("fps");
+const ballElement = document.getElementById("ballCount");
+const tntElement = document.getElementById("tntCount");
+const tntStats = document.getElementById("tntStats");
+
+function resize(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    RADIUS=Math.max(7,Math.min(10,innerWidth*.018));
+    DRAW_LINE_WIDTH=innerWidth<=700?6:8;
+    ERASER_RADIUS=innerWidth<=700?12:14;
+    if(minecraftMode || blocks.size) generateWorld();
+}
+
+window.addEventListener("resize",resize);
+
+const balls = [];
+const tnts = [];
+const tntParticles = [];
+const blastRings = [];
+const blocks = new Map();
+const drawnLines = [];
+let activeLine = null;
+let eraserPrevious = null;
+let totalBallsCreated = 0;
+let minecraftMode = false;
+let drawMode = false;
+let eraserMode = false;
+let activePointerId = null;
+let skipCanvasClick = false;
+let DRAW_LINE_WIDTH = innerWidth<=700?6:8;
+let ERASER_RADIUS = innerWidth<=700?12:14;
+let tileSize = 28;
+let worldColumns = 0;
+let worldRows = 0;
+let groundRow = 0;
+let generationProgress = 0;
+let screenShake = 0;
+let explosionFlash = 0;
+
+let RADIUS = Math.max(7,Math.min(10,innerWidth*.018));
+const GRAVITY = 0.32;
+const BOUNCE = 0.92;
+const textures = [
+    ["grassblock.png", 0],
+    ["dirt.png", 1],
+    ["stone.png", 3],
+    ["iron ore.png", 6],
+    ["gold ore.png", 8],
+    ["Redstone ore.png", 10],
+    ["lapis ore.png", 12],
+    ["diamond ore.png", 14],
+    ["Deepslate.png", 18],
+    ["Deepslate iron.png", 20],
+    ["Deepslate gold.png", 22],
+    ["Deepslate redstone.png", 24],
+    ["Deepslate Lapis.png", 26],
+    ["Deepslate diamond.png", 28]
+].map(([src, depth]) => {
+    const image = new Image();
+    image.src = src;
+    return {src, depth, image};
+});
+const tntImage = new Image();
+tntImage.src = "tnt.png";
+
+function chooseBlock(depth){
+    const candidates = textures.filter(texture => texture.depth <= depth);
+    let texture;
+    if(depth === 0) texture = textures[0];
+    else if(depth <= 2) texture = textures[1];
+    else if(depth >= 18){
+        const oreOptions = candidates.filter(item => item.depth >= 20);
+        texture = Math.random() < .16 && oreOptions.length
+            ? oreOptions[Math.floor(Math.random()*oreOptions.length)]
+            : textures[8];
+    }else{
+        const oreOptions = candidates.filter(item => item.depth >= 6);
+        texture = Math.random() < .13 && oreOptions.length
+            ? oreOptions[Math.floor(Math.random()*oreOptions.length)]
+            : textures[2];
+    }
+    return texture;
+}
+
+function generateWorld(){
+    tileSize = Math.max(20,Math.min(32,Math.round(innerWidth/34)));
+    worldColumns = Math.ceil(innerWidth/tileSize);
+    worldRows = Math.ceil(innerHeight/tileSize);
+    groundRow = Math.max(2,Math.floor(innerHeight*.52/tileSize));
+    generationProgress = 0;
+    blocks.clear();
+    const visibleDepth=Math.max(1,worldRows-groundRow-1);
+    for(let row=groundRow;row<worldRows;row++){
+        for(let col=0;col<worldColumns;col++){
+            const depth=Math.round((row-groundRow)*28/visibleDepth);
+            blocks.set(`${col},${row}`,{
+                col,row,
+                texture:chooseBlock(depth),
+                generatedAt:row-groundRow
+            });
+        }
+    }
+}
+
+resize();
+
+class Ball{
+    constructor(x,y){
+        this.x=x;
+        this.y=y;
+        this.vx=0;
+        this.vy=0;
+    }
+
+    update(dt){
+        this.vy+=GRAVITY*dt;
+        this.x+=this.vx*dt;
+        this.y+=this.vy*dt;
+        this.vx*=Math.pow(.999,dt);
+        this.vy*=Math.pow(.999,dt);
+
+        if(this.x-RADIUS<0){this.x=RADIUS;this.vx*=-BOUNCE}
+        if(this.x+RADIUS>innerWidth){this.x=innerWidth-RADIUS;this.vx*=-BOUNCE}
+        if(this.y-RADIUS<0){this.y=RADIUS;this.vy*=-BOUNCE}
+        const floor = innerHeight;
+        if(this.y+RADIUS>floor){
+            this.y=floor-RADIUS;
+            this.vy*=-BOUNCE;
+            this.vx*=.98;
+        }
+        resolveBlockCollision(this);
+        resolveDrawnLineCollision(this);
+    }
+
+    draw(){
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,RADIUS,0,Math.PI*2);
+        ctx.fillStyle="white";
+        ctx.fill();
+    }
+}
+
+function createBall(x,y){
+    balls.push(new Ball(x,y));
+    totalBallsCreated++;
+}
+
+function blockIsSolid(col,row){
+    const block=blocks.get(`${col},${row}`);
+    return Boolean(block&&block.generatedAt<=generationProgress);
+}
+
+function resolveBlockCollision(body){
+    if(!blocks.size) return;
+    for(let pass=0;pass<3;pass++){
+        const minCol=Math.floor((body.x-RADIUS)/tileSize);
+        const maxCol=Math.floor((body.x+RADIUS)/tileSize);
+        const minRow=Math.floor((body.y-RADIUS)/tileSize);
+        const maxRow=Math.floor((body.y+RADIUS)/tileSize);
+        let deepest=null;
+
+        for(let row=minRow;row<=maxRow;row++){
+            for(let col=minCol;col<=maxCol;col++){
+                const block=blocks.get(`${col},${row}`);
+                if(!block||block.generatedAt>generationProgress) continue;
+                const left=col*tileSize;
+                const top=row*tileSize;
+                const closestX=Math.max(left,Math.min(body.x,left+tileSize));
+                const closestY=Math.max(top,Math.min(body.y,top+tileSize));
+                let dx=body.x-closestX;
+                let dy=body.y-closestY;
+                const distance=Math.hypot(dx,dy);
+                if(distance>=RADIUS) continue;
+
+                let overlap;
+                if(distance===0){
+                    const edges=[
+                        {distance:body.x-left,nx:-1,ny:0,neighbor:[col-1,row]},
+                        {distance:left+tileSize-body.x,nx:1,ny:0,neighbor:[col+1,row]},
+                        {distance:body.y-top,nx:0,ny:-1,neighbor:[col,row-1]},
+                        {distance:top+tileSize-body.y,nx:0,ny:1,neighbor:[col,row+1]}
+                    ].filter(edge=>!blockIsSolid(edge.neighbor[0],edge.neighbor[1]));
+                    if(!edges.length){
+                        edges.push(
+                            {distance:body.x-left,nx:-1,ny:0},
+                            {distance:left+tileSize-body.x,nx:1,ny:0},
+                            {distance:body.y-top,nx:0,ny:-1},
+                            {distance:top+tileSize-body.y,nx:0,ny:1}
+                        );
+                    }
+                    edges.sort((a,b)=>a.distance-b.distance);
+                    dx=edges[0].nx;
+                    dy=edges[0].ny;
+                    overlap=RADIUS+edges[0].distance;
+                }else{
+                    overlap=RADIUS-distance;
+                    dx/=distance;
+                    dy/=distance;
+                }
+                if(!deepest||overlap>deepest.overlap) deepest={dx,dy,overlap};
+            }
+        }
+
+        if(!deepest) break;
+        body.x+=deepest.dx*deepest.overlap;
+        body.y+=deepest.dy*deepest.overlap;
+        const velocity=body.vx*deepest.dx+body.vy*deepest.dy;
+        if(velocity<0){
+            body.vx-=(1+BOUNCE)*velocity*deepest.dx;
+            body.vy-=(1+BOUNCE)*velocity*deepest.dy;
+            if(deepest.dy<-.6) body.vx*=.94;
+        }
+    }
+}
+
+function resolveDrawnLineCollision(body){
+    const lineRadius=DRAW_LINE_WIDTH/2;
+    const minimum=RADIUS+lineRadius;
+    for(let pass=0;pass<3;pass++){
+        let deepest=null;
+        for(const line of drawnLines){
+            for(let i=1;i<line.length;i++){
+                const start=line[i-1];
+                const end=line[i];
+                const dx=end.x-start.x;
+                const dy=end.y-start.y;
+                const lengthSquared=dx*dx+dy*dy;
+                if(lengthSquared===0) continue;
+
+                const projection=Math.max(0,Math.min(1,((body.x-start.x)*dx+(body.y-start.y)*dy)/lengthSquared));
+                const closestX=start.x+projection*dx;
+                const closestY=start.y+projection*dy;
+                let nx=body.x-closestX;
+                let ny=body.y-closestY;
+                const distance=Math.hypot(nx,ny);
+                if(distance>=minimum) continue;
+
+                if(distance<.0001){
+                    const length=Math.sqrt(lengthSquared);
+                    nx=-dy/length;
+                    ny=dx/length;
+                    if(body.vx*nx+body.vy*ny>0){
+                        nx=-nx;
+                        ny=-ny;
+                    }
+                }else{
+                    nx/=distance;
+                    ny/=distance;
+                }
+                const overlap=minimum-distance;
+                if(!deepest||overlap>deepest.overlap) deepest={nx,ny,overlap};
+            }
+        }
+        if(!deepest) break;
+
+        body.x+=deepest.nx*deepest.overlap;
+        body.y+=deepest.ny*deepest.overlap;
+        const normalVelocity=body.vx*deepest.nx+body.vy*deepest.ny;
+        if(normalVelocity<0){
+            body.vx-=(1+BOUNCE)*normalVelocity*deepest.nx;
+            body.vy-=(1+BOUNCE)*normalVelocity*deepest.ny;
+            const tangentX=-deepest.ny;
+            const tangentY=deepest.nx;
+            const tangentVelocity=body.vx*tangentX+body.vy*tangentY;
+            body.vx-=tangentVelocity*tangentX*.025;
+            body.vy-=tangentVelocity*tangentY*.025;
+        }
+    }
+}
+
+function resolveTntDrawCollision(tnt,half,startX,startY){
+    const lineRadius=DRAW_LINE_WIDTH/2;
+    const minimum=half+lineRadius;
+    const endX=tnt.x;
+    const endY=tnt.y;
+    const travel=Math.hypot(endX-startX,endY-startY);
+    const steps=Math.max(1,Math.ceil(travel/Math.max(2,minimum*.35)));
+
+    for(let step=1;step<=steps;step++){
+        const progress=step/steps;
+        const sampleX=startX+(endX-startX)*progress;
+        const sampleY=startY+(endY-startY)*progress;
+        let deepest=null;
+        for(const line of drawnLines){
+            for(let i=1;i<line.length;i++){
+                const start=line[i-1];
+                const end=line[i];
+                const dx=end.x-start.x;
+                const dy=end.y-start.y;
+                const lengthSquared=dx*dx+dy*dy;
+                if(lengthSquared===0) continue;
+                const projection=Math.max(0,Math.min(1,((sampleX-start.x)*dx+(sampleY-start.y)*dy)/lengthSquared));
+                const closestX=start.x+projection*dx;
+                const closestY=start.y+projection*dy;
+                let nx=sampleX-closestX;
+                let ny=sampleY-closestY;
+                const distance=Math.hypot(nx,ny);
+                if(distance>=minimum) continue;
+
+                if(distance<.0001){
+                    const length=Math.sqrt(lengthSquared);
+                    nx=-dy/length;
+                    ny=dx/length;
+                    if(tnt.vx*nx+tnt.vy*ny>0){
+                        nx=-nx;
+                        ny=-ny;
+                    }
+                }else{
+                    nx/=distance;
+                    ny/=distance;
+                }
+                const overlap=minimum-distance;
+                if(!deepest||overlap>deepest.overlap) deepest={nx,ny,overlap};
+            }
+        }
+
+        if(!deepest) continue;
+        tnt.x=sampleX+deepest.nx*(deepest.overlap+.2);
+        tnt.y=sampleY+deepest.ny*(deepest.overlap+.2);
+        const normalVelocity=tnt.vx*deepest.nx+tnt.vy*deepest.ny;
+        if(normalVelocity<0){
+            const impulse=(1+.32)*normalVelocity;
+            tnt.vx-=impulse*deepest.nx;
+            tnt.vy-=impulse*deepest.ny;
+            const tangentX=-deepest.ny;
+            const tangentY=deepest.nx;
+            const tangentVelocity=tnt.vx*tangentX+tnt.vy*tangentY;
+            tnt.vx-=tangentVelocity*tangentX*.08;
+            tnt.vy-=tangentVelocity*tangentY*.08;
+            tnt.angularVelocity+=(tangentVelocity/Math.max(half,1))*.18;
+        }
+        return true;
+    }
+    return false;
+}
+
+function eraseAt(x,y){
+    const radius=ERASER_RADIUS+DRAW_LINE_WIDTH/2;
+    for(let lineIndex=drawnLines.length-1;lineIndex>=0;lineIndex--){
+        const line=drawnLines[lineIndex];
+        if(line.length===1){
+            if(Math.hypot(line[0].x-x,line[0].y-y)<=radius) drawnLines.splice(lineIndex,1);
+            continue;
+        }
+
+        const remaining=[];
+        let piece=[];
+        const flushPiece=()=>{
+            if(piece.length>1) remaining.push(piece);
+            piece=[];
+        };
+        const addPoint=(point)=>{
+            const last=piece[piece.length-1];
+            if(!last||Math.hypot(last.x-point.x,last.y-point.y)>.01) piece.push(point);
+        };
+
+        for(let i=1;i<line.length;i++){
+            const start=line[i-1];
+            const end=line[i];
+            const dx=end.x-start.x;
+            const dy=end.y-start.y;
+            const relativeX=start.x-x;
+            const relativeY=start.y-y;
+            const a=dx*dx+dy*dy;
+            const b=2*(relativeX*dx+relativeY*dy);
+            const c=relativeX*relativeX+relativeY*relativeY-radius*radius;
+            const discriminant=b*b-4*a*c;
+            const cuts=[0,1];
+
+            if(a>0&&discriminant>0){
+                const root=Math.sqrt(discriminant);
+                const first=(-b-root)/(2*a);
+                const second=(-b+root)/(2*a);
+                if(first>0&&first<1) cuts.push(first);
+                if(second>0&&second<1) cuts.push(second);
+            }
+
+            cuts.sort((first,second)=>first-second);
+            for(let cut=1;cut<cuts.length;cut++){
+                const from=cuts[cut-1];
+                const to=cuts[cut];
+                const middle=(from+to)/2;
+                const middleX=start.x+dx*middle-x;
+                const middleY=start.y+dy*middle-y;
+                if(middleX*middleX+middleY*middleY<radius*radius){
+                    flushPiece();
+                    continue;
+                }
+
+                const segmentStart={x:start.x+dx*from,y:start.y+dy*from};
+                const segmentEnd={x:start.x+dx*to,y:start.y+dy*to};
+                const last=piece[piece.length-1];
+                if(last&&Math.hypot(last.x-segmentStart.x,last.y-segmentStart.y)>.01) flushPiece();
+                addPoint(segmentStart);
+                addPoint(segmentEnd);
+            }
+        }
+        flushPiece();
+        drawnLines.splice(lineIndex,1,...remaining);
+    }
+}
+
+function eraseAlong(from,to){
+    const distance=Math.hypot(to.x-from.x,to.y-from.y);
+    const steps=Math.max(1,Math.ceil(distance/Math.max(2,ERASER_RADIUS*.4)));
+    for(let step=1;step<=steps;step++){
+        const progress=step/steps;
+        eraseAt(from.x+(to.x-from.x)*progress,from.y+(to.y-from.y)*progress);
+    }
+}
+
+function drawUserLines(){
+    ctx.save();
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    for(const line of activeLine?[...drawnLines,activeLine]:drawnLines){
+        if(line.length<2) continue;
+        ctx.beginPath();
+        ctx.moveTo(line[0].x,line[0].y);
+        for(let i=1;i<line.length;i++) ctx.lineTo(line[i].x,line[i].y);
+        ctx.strokeStyle="rgba(100,210,255,.22)";
+        ctx.lineWidth=DRAW_LINE_WIDTH+8;
+        ctx.stroke();
+        ctx.strokeStyle="#eafaff";
+        ctx.lineWidth=DRAW_LINE_WIDTH;
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+function collisions(){
+    for(let i=0;i<balls.length;i++){
+        for(let j=i+1;j<balls.length;j++){
+            const a=balls[i];
+            const b=balls[j];
+            let dx=b.x-a.x;
+            let dy=b.y-a.y;
+            let dist=Math.hypot(dx,dy);
+            if(dist===0) dist=.01;
+            const minDist=RADIUS*2;
+            if(dist<minDist){
+                const nx=dx/dist;
+                const ny=dy/dist;
+                const overlap=minDist-dist;
+                a.x-=nx*overlap*.5;
+                a.y-=ny*overlap*.5;
+                b.x+=nx*overlap*.5;
+                b.y+=ny*overlap*.5;
+                const rvx=b.vx-a.vx;
+                const rvy=b.vy-a.vy;
+                const vel=rvx*nx+rvy*ny;
+                if(vel>0) continue;
+                const impulse=-(1+BOUNCE)*vel*.5;
+                const ix=impulse*nx;
+                const iy=impulse*ny;
+                a.vx-=ix;
+                a.vy-=iy;
+                b.vx+=ix;
+                b.vy+=iy;
+            }
+        }
+    }
+}
+
+function dropTnt(x,y){
+    if(!minecraftMode) return;
+    tnts.push({
+        x,y,vx:(Math.random()-.5)*1.2,vy:0,
+        size:innerWidth<=700?Math.max(20,tileSize*.82):tileSize*.68,
+        rotation:(Math.random()-.5)*.2,angularVelocity:(Math.random()-.5)*.14,
+        fuseStarted:false,fuse:0
+    });
+    tntElement.textContent=tnts.length;
+}
+
+function explodeTnt(tnt){
+    const radius=tileSize*3.7;
+    const centerX=tnt.x;
+    const centerY=tnt.y;
+    for(const [key,block] of blocks){
+        const x=(block.col+.5)*tileSize;
+        const y=(block.row+.5)*tileSize;
+        if(Math.hypot(x-centerX,y-centerY)<radius) blocks.delete(key);
+    }
+    for(const ball of balls){
+        const dx=ball.x-centerX;
+        const dy=ball.y-centerY;
+        const distance=Math.max(1,Math.hypot(dx,dy));
+        if(distance<radius){
+            const force=(1-distance/radius)*7;
+            ball.vx+=dx/distance*force;
+            ball.vy+=dy/distance*force-2;
+        }
+    }
+    for(let i=0;i<110;i++){
+        const angle=Math.random()*Math.PI*2;
+        const speed=7+Math.random()*18;
+        const life=16+Math.random()*22;
+        tntParticles.push({
+            x:centerX,
+            y:centerY,
+            vx:Math.cos(angle)*speed,
+            vy:Math.sin(angle)*speed-2,
+            size:2+Math.random()*5,
+            hue:Math.floor(Math.random()*360),
+            life,
+            maxLife:life,
+            rotation:Math.random()*Math.PI,
+            spin:(Math.random()-.5)*.45
+        });
+    }
+    blastRings.push({x:centerX,y:centerY,radius:tileSize*.2,life:18,maxLife:18});
+    screenShake=Math.max(screenShake,12);
+    explosionFlash=Math.max(explosionFlash,5);
+}
+
+function updateTnt(dt){
+    for(const tnt of tnts){
+        const half=tnt.size/2;
+        let touchingBlock=false;
+        let touchingGround=false;
+        let touchingDrawnLine=false;
+        const movementStartX=tnt.x;
+        const movementStartY=tnt.y;
+
+        tnt.vy=Math.min(tnt.vy+.36*dt,12);
+        const oldX=tnt.x;
+        tnt.x+=tnt.vx*dt;
+        const minRow=Math.floor((tnt.y-half)/tileSize);
+        const maxRow=Math.floor((tnt.y+half)/tileSize);
+        const minCol=Math.floor((tnt.x-half)/tileSize);
+        const maxCol=Math.floor((tnt.x+half)/tileSize);
+
+        for(let row=minRow;row<=maxRow;row++){
+            for(let col=minCol;col<=maxCol;col++){
+                const block=blocks.get(`${col},${row}`);
+                if(!block||block.generatedAt>generationProgress) continue;
+                const left=col*tileSize;
+                const right=left+tileSize;
+                const top=row*tileSize;
+                const bottom=top+tileSize;
+                if(tnt.x+half<=left||tnt.x-half>=right||tnt.y+half<=top||tnt.y-half>=bottom) continue;
+                touchingBlock=true;
+                if(tnt.vx>0&&oldX+half<=left+Math.abs(tnt.vx*dt)+.5){
+                    tnt.x=left-half;
+                    tnt.vx=-Math.abs(tnt.vx)*.28;
+                    tnt.angularVelocity-=Math.abs(tnt.vx)/Math.max(half,1)*.2;
+                }else if(tnt.vx<0&&oldX-half>=right-Math.abs(tnt.vx*dt)-.5){
+                    tnt.x=right+half;
+                    tnt.vx=Math.abs(tnt.vx)*.28;
+                    tnt.angularVelocity+=Math.abs(tnt.vx)/Math.max(half,1)*.2;
+                }
+            }
+        }
+
+        if(tnt.x-half<0){
+            tnt.x=half;
+            tnt.vx=Math.abs(tnt.vx)*.28;
+        }else if(tnt.x+half>innerWidth){
+            tnt.x=innerWidth-half;
+            tnt.vx=-Math.abs(tnt.vx)*.28;
+        }
+
+        const oldY=tnt.y;
+        const oldVy=tnt.vy;
+        tnt.y+=tnt.vy*dt;
+        const verticalMinCol=Math.floor((tnt.x-half)/tileSize);
+        const verticalMaxCol=Math.floor((tnt.x+half)/tileSize);
+        const verticalMinRow=Math.floor((tnt.y-half)/tileSize);
+        const verticalMaxRow=Math.floor((tnt.y+half)/tileSize);
+        for(let row=verticalMinRow;row<=verticalMaxRow;row++){
+            for(let col=verticalMinCol;col<=verticalMaxCol;col++){
+                const block=blocks.get(`${col},${row}`);
+                if(!block||block.generatedAt>generationProgress) continue;
+                const left=col*tileSize;
+                const right=left+tileSize;
+                const top=row*tileSize;
+                const bottom=top+tileSize;
+                if(tnt.x+half<=left||tnt.x-half>=right||tnt.y+half<=top||tnt.y-half>=bottom) continue;
+                touchingBlock=true;
+                if(tnt.vy>=0&&oldY+half<=top+Math.abs(tnt.vy*dt)+1){
+                    tnt.y=top-half;
+                    tnt.vy=Math.abs(oldVy)<1.2?0:-Math.abs(oldVy)*.18;
+                    tnt.angularVelocity+=tnt.vx/Math.max(half,1)*.18;
+                }else if(tnt.vy<0&&oldY-half>=bottom-Math.abs(tnt.vy*dt)-1){
+                    tnt.y=bottom+half;
+                    tnt.vy=Math.abs(oldVy)<1.2?0:Math.abs(oldVy)*.18;
+                }else if(tnt.y<top+tileSize/2){
+                    tnt.y=top-half;
+                    tnt.vy=-Math.abs(tnt.vy)*.12;
+                }else{
+                    tnt.y=bottom+half;
+                    tnt.vy=Math.abs(tnt.vy)*.12;
+                }
+            }
+        }
+
+        if(tnt.y+half>=innerHeight){
+            tnt.y=innerHeight-half;
+            tnt.vy=Math.abs(tnt.vy)<1.2?0:-Math.abs(tnt.vy)*.18;
+            touchingGround=true;
+        }
+
+        touchingDrawnLine=resolveTntDrawCollision(tnt,half,movementStartX,movementStartY);
+
+        if(Math.abs(tnt.vy)<.8&&(touchingBlock||touchingGround||touchingDrawnLine)){
+            tnt.vy=0;
+            tnt.vx*=Math.pow(.96,dt);
+            const rollingSpin=tnt.vx/Math.max(half,1);
+            tnt.angularVelocity+=(rollingSpin-tnt.angularVelocity)*.2*dt;
+        }else{
+            tnt.vx*=Math.pow(.999,dt);
+        }
+
+        tnt.angularVelocity*=Math.pow(touchingGround||touchingBlock||touchingDrawnLine ? .985 : .999,dt);
+        tnt.rotation+=tnt.angularVelocity*dt;
+
+        for(const ball of balls){
+            const dx=ball.x-tnt.x;
+            const dy=ball.y-tnt.y;
+            const distance=Math.hypot(dx,dy);
+            const minimum=RADIUS+half*.72;
+            if(distance>=minimum) continue;
+            const nx=distance?dx/distance:0;
+            const ny=distance?dy/distance:-1;
+            const overlap=minimum-distance;
+            ball.x+=nx*overlap*.7;
+            ball.y+=ny*overlap*.7;
+            tnt.x-=nx*overlap*.3;
+            tnt.y-=ny*overlap*.3;
+            const relative=(ball.vx-tnt.vx)*nx+(ball.vy-tnt.vy)*ny;
+            if(relative<0){
+                const impulse=-relative*1.35;
+                ball.vx+=impulse*nx;
+                ball.vy+=impulse*ny;
+                tnt.vx-=impulse*nx*.35;
+                tnt.vy-=impulse*ny*.35;
+                tnt.angularVelocity+=(nx*(ball.y-tnt.y)-ny*(ball.x-tnt.x))*.008;
+            }
+            touchingBlock=true;
+        }
+
+        if(!tnt.fuseStarted){
+            if(touchingBlock||touchingGround||touchingDrawnLine){
+                tnt.fuseStarted=true;
+                tnt.fuse=.75*60;
+            }
+        }else{
+            tnt.fuse-=dt;
+            if(tnt.fuse<=0) tnt.explode=true;
+        }
+    }
+    for(let i=tnts.length-1;i>=0;i--){
+        if(tnts[i].explode){
+            explodeTnt(tnts[i]);
+            tnts.splice(i,1);
+        }
+    }
+    for(const particle of tntParticles){
+        particle.life-=dt;
+        particle.x+=particle.vx*dt;
+        particle.y+=particle.vy*dt;
+        particle.vx*=Math.pow(.94,dt);
+        particle.vy+=.09*dt;
+        particle.rotation+=particle.spin*dt;
+    }
+    for(let i=tntParticles.length-1;i>=0;i--){
+        if(tntParticles[i].life<=0) tntParticles.splice(i,1);
+    }
+    for(const ring of blastRings){
+        ring.life-=dt;
+        ring.radius+=tileSize*.85*dt;
+    }
+    for(let i=blastRings.length-1;i>=0;i--){
+        if(blastRings[i].life<=0) blastRings.splice(i,1);
+    }
+    screenShake*=Math.pow(.72,dt);
+    explosionFlash=Math.max(0,explosionFlash-dt);
+    tntElement.textContent=tnts.length;
+}
+
+function drawWorld(){
+    if(!blocks.size) return;
+    generationProgress=Math.min(worldRows,generationProgress+.16);
+    for(const block of blocks.values()){
+        if(block.generatedAt>generationProgress) continue;
+        const x=block.col*tileSize;
+        const y=block.row*tileSize;
+        const image=block.texture.image;
+        if(image.complete&&image.naturalWidth){
+            ctx.drawImage(image,x,y,tileSize+.5,tileSize+.5);
+        }else{
+            ctx.fillStyle="#777";
+            ctx.fillRect(x,y,tileSize,tileSize);
+        }
+        ctx.strokeStyle="rgba(0,0,0,.1)";
+        ctx.strokeRect(x+.5,y+.5,tileSize-1,tileSize-1);
+    }
+}
+
+function drawTnt(){
+    for(const tnt of tnts){
+        const size=tnt.size;
+        const flashing=tnt.fuseStarted&&Math.sin(performance.now()*.035)>0;
+        ctx.shadowColor=flashing?"#fff000":"#ff4838";
+        ctx.shadowBlur=flashing?22:8;
+        if(flashing) ctx.globalAlpha=.68+Math.random()*.32;
+        ctx.save();
+        ctx.translate(tnt.x,tnt.y);
+        ctx.rotate(tnt.rotation);
+        if(tntImage.complete&&tntImage.naturalWidth){
+            ctx.drawImage(tntImage,-size/2,-size/2,size,size);
+        }else{
+            ctx.fillStyle="#d33";
+            ctx.fillRect(-size/2,-size/2,size,size);
+        }
+        ctx.restore();
+        ctx.globalAlpha=1;
+        ctx.shadowBlur=0;
+    }
+    for(const ring of blastRings){
+        ctx.save();
+        ctx.globalAlpha=ring.life/ring.maxLife;
+        ctx.strokeStyle="#fff2b0";
+        ctx.lineWidth=Math.max(2,tileSize*.11*ctx.globalAlpha);
+        ctx.shadowColor="#ff813e";
+        ctx.shadowBlur=18;
+        ctx.beginPath();
+        ctx.arc(ring.x,ring.y,ring.radius,0,Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+    }
+    for(const particle of tntParticles){
+        ctx.save();
+        ctx.globalAlpha=Math.max(0,particle.life/particle.maxLife);
+        ctx.translate(particle.x,particle.y);
+        ctx.rotate(particle.rotation);
+        ctx.fillStyle=`hsl(${particle.hue} 100% 60%)`;
+        ctx.shadowColor=ctx.fillStyle;
+        ctx.shadowBlur=0;
+        ctx.fillRect(-particle.size/2,-particle.size/2,particle.size,particle.size);
+        ctx.restore();
+    }
+    ctx.globalAlpha=1;
+    ctx.shadowBlur=0;
+}
+
+canvas.addEventListener("pointerdown",e=>{
+    if((!drawMode&&!eraserMode)||e.button!==0) return;
+    activePointerId=e.pointerId;
+    skipCanvasClick=true;
+    if(drawMode) activeLine=[{x:e.offsetX,y:e.offsetY}];
+    if(eraserMode){
+        eraserPrevious={x:e.offsetX,y:e.offsetY};
+        eraseAt(e.offsetX,e.offsetY);
+    }
+    canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener("pointermove",e=>{
+    mouseX=e.clientX;
+    mouseY=e.clientY;
+    if(activePointerId!==e.pointerId) return;
+    const point={x:e.offsetX,y:e.offsetY};
+    if(drawMode&&activeLine){
+        const previous=activeLine[activeLine.length-1];
+        if(Math.hypot(point.x-previous.x,point.y-previous.y)>=3) activeLine.push(point);
+    }else if(eraserMode&&eraserPrevious){
+        eraseAlong(eraserPrevious,point);
+        eraserPrevious=point;
+    }
+});
+
+function finishDrawing(e){
+    if(activePointerId!==e.pointerId) return;
+    if(activeLine&&activeLine.length>1) drawnLines.push(activeLine);
+    activeLine=null;
+    eraserPrevious=null;
+    activePointerId=null;
+    if(canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+}
+
+canvas.addEventListener("pointerup",finishDrawing);
+canvas.addEventListener("pointercancel",finishDrawing);
+canvas.addEventListener("click",e=>{
+    if(drawMode||eraserMode){
+        skipCanvasClick=false;
+        return;
+    }
+    if(skipCanvasClick){
+        skipCanvasClick=false;
+        return;
+    }
+    if(minecraftMode) dropTnt(e.clientX,e.clientY);
+    else createBall(e.clientX,e.clientY);
+});
+
+canvas.addEventListener("contextmenu",e=>{
+    e.preventDefault();
+    balls.length=0;
+});
+
+let mouseX=innerWidth/2;
+let mouseY=innerHeight/2;
+window.addEventListener("mousemove",e=>{
+    mouseX=e.clientX;
+    mouseY=e.clientY;
+});
+
+function pop(button){
+    button.animate(
+        [{transform:"scale(.85)"},{transform:"scale(1.15)"},{transform:"scale(1)"}],
+        {duration:300,easing:"cubic-bezier(.22,1,.36,1)"}
+    );
+}
+
+const autoSpawnBtn=document.getElementById("autoSpawnBtn");
+const autoClickBtn=document.getElementById("autoClickBtn");
+const resetBtn=document.getElementById("resetBtn");
+const drawBtn=document.getElementById("drawBtn");
+const eraserBtn=document.getElementById("eraserBtn");
+const minecraftBtn=document.getElementById("minecraftBtn");
+let autoSpawn=false;
+let autoClick=false;
+
+autoSpawnBtn.addEventListener("click",()=>{
+    autoSpawn=!autoSpawn;
+    pop(autoSpawnBtn);
+    autoSpawnBtn.textContent=autoSpawn?"Auto Spawn ON":"Auto Spawn OFF";
+    autoSpawnBtn.classList.toggle("active",autoSpawn);
+});
+
+autoClickBtn.addEventListener("click",()=>{
+    autoClick=!autoClick;
+    pop(autoClickBtn);
+    autoClickBtn.textContent=autoClick?"Auto Click ON":"Auto Click OFF";
+    autoClickBtn.classList.toggle("active",autoClick);
+});
+
+drawBtn.addEventListener("click",()=>{
+    drawMode=!drawMode;
+    if(drawMode){
+        eraserMode=false;
+        eraserBtn.textContent="Eraser OFF";
+        eraserBtn.classList.remove("active");
+    }
+    pop(drawBtn);
+    drawBtn.textContent=drawMode?"Draw ON":"Draw OFF";
+    drawBtn.classList.toggle("active",drawMode);
+    canvas.classList.toggle("drawing",drawMode);
+    canvas.classList.toggle("erasing",eraserMode);
+    if(!drawMode) activeLine=null;
+});
+
+eraserBtn.addEventListener("click",()=>{
+    eraserMode=!eraserMode;
+    if(eraserMode){
+        drawMode=false;
+        activeLine=null;
+        drawBtn.textContent="Draw OFF";
+        drawBtn.classList.remove("active");
+    }
+    pop(eraserBtn);
+    eraserBtn.textContent=eraserMode?"Eraser ON":"Eraser OFF";
+    eraserBtn.classList.toggle("active",eraserMode);
+    canvas.classList.toggle("drawing",drawMode);
+    canvas.classList.toggle("erasing",eraserMode);
+});
+
+resetBtn.addEventListener("click",()=>{
+    pop(resetBtn);
+    balls.length=0;
+    tnts.length=0;
+    tntParticles.length=0;
+    blastRings.length=0;
+    drawnLines.length=0;
+    activeLine=null;
+    totalBallsCreated=0;
+    tntElement.textContent="0";
+    if(minecraftMode) generateWorld();
+});
+
+minecraftBtn.addEventListener("click",()=>{
+    minecraftMode=!minecraftMode;
+    pop(minecraftBtn);
+    minecraftBtn.textContent=minecraftMode?"Ian Mode ON":"Ian Mode OFF";
+    minecraftBtn.classList.toggle("active",minecraftMode);
+    tntStats.hidden=!minecraftMode;
+    tnts.length=0;
+    tntParticles.length=0;
+    blastRings.length=0;
+    if(minecraftMode&&!blocks.size) generateWorld();
+    tntElement.textContent="0";
+});
+
+let lastTime=performance.now();
+let spawnTimer=0;
+let clickTimer=0;
+
+function animate(time){
+    const frameTime=time-lastTime;
+    fpsElement.textContent=Math.round(1000/Math.max(frameTime,1));
+    ballElement.textContent=totalBallsCreated;
+    const dt=Math.min(frameTime/16.666,innerWidth<=700?3:2);
+    lastTime=time;
+    ctx.fillStyle="rgba(0,0,0,0.08)";
+    ctx.fillRect(0,0,innerWidth,innerHeight);
+
+    if(autoSpawn){
+        spawnTimer+=dt;
+        const spawnInterval=minecraftMode?36:12;
+        while(spawnTimer>=spawnInterval){
+            spawnTimer-=spawnInterval;
+            if(minecraftMode) dropTnt(Math.random()*innerWidth,-tileSize);
+            else createBall(Math.random()*innerWidth,20);
+        }
+    }
+
+    clickTimer+=dt;
+    if(autoClick){
+        const clickInterval=minecraftMode?24:6;
+        while(clickTimer>=clickInterval){
+            clickTimer-=clickInterval;
+            if(minecraftMode) dropTnt(mouseX,mouseY);
+            else createBall(mouseX,mouseY);
+        }
+    }else clickTimer=0;
+
+    if(screenShake>.2){
+        ctx.save();
+        ctx.translate((Math.random()-.5)*screenShake,(Math.random()-.5)*screenShake);
+    }
+    drawWorld();
+    drawUserLines();
+    for(const ball of balls) ball.update(dt);
+    for(let i=0;i<3;i++) collisions();
+    for(const ball of balls) ball.draw();
+    if(minecraftMode) updateTnt(dt);
+    drawTnt();
+    if(screenShake>.2) ctx.restore();
+    if(explosionFlash>0){
+        ctx.fillStyle=`rgba(255,245,207,${Math.min(.42,explosionFlash*.08)})`;
+        ctx.fillRect(0,0,innerWidth,innerHeight);
+    }
+    requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>
